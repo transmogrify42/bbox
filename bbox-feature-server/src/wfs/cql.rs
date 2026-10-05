@@ -660,7 +660,7 @@ impl Parser<'_> {
             ));
         }
         use geozero::ToGeo;
-        geozero::wkt::WktStr(wkt)
+        geozero::wkt::Wkt(wkt)
             .to_geo()
             .map_err(|e| FilterError::Parse(format!("CQL: invalid WKT `{wkt}`: {e}")))
     }

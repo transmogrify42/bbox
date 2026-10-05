@@ -20,7 +20,7 @@ use bbox_core::config::{error_exit, DatasourceCfg, NamedDatasourceCfg};
 use bbox_core::{Format, NamedObjectStore, TileResponse};
 use dyn_clone::{clone_trait_object, DynClone};
 use geozero::error::GeozeroError;
-use martin_mbtiles::Metadata;
+use crate::mbtiles_ds::Metadata;
 use once_cell::sync::OnceCell;
 use std::env;
 use tile_grid::{tms, RegistryError, Tms, Xyz};

@@ -12,7 +12,7 @@ use bbox_core::service::OgcApiService;
 use bbox_core::{Compression, Format, TileResponse};
 use clap::{ArgMatches, Args, FromArgMatches};
 use log::debug;
-use martin_mbtiles::Metadata;
+use crate::mbtiles_ds::Metadata;
 use ogcapi_types::tiles::TileMatrixSet;
 use serde_json::json;
 use std::collections::HashMap;

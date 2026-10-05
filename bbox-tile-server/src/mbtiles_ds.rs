@@ -1,5 +1,7 @@
 use crate::config::MbtilesStoreCfg;
-use martin_mbtiles::{init_mbtiles_schema, MbtError, MbtResult, MbtType, Mbtiles, Metadata};
+use martin_mbtiles::{init_mbtiles_schema, MbtError, MbtResult, MbtType, Mbtiles, NormalizedSchema};
+use serde::{ser::SerializeStruct, Serialize, Serializer};
+use tilejson::TileJSON;
 use martin_tile_utils::{Encoding as TileEncoding, Format as TileFormat, TileInfo};
 use serde_json::json;
 use sqlx::{sqlite::SqliteConnectOptions, Connection, Pool, Row, Sqlite, SqlitePool};
@@ -15,6 +17,47 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// MBTiles metadata with tile format and encoding
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Metadata {
+    pub id: String,
+    #[serde(serialize_with = "serialize_tile_info")]
+    pub tile_info: TileInfo,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layer_type: Option<String>,
+    pub tilejson: TileJSON,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub json: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agg_tiles_hash: Option<String>,
+}
+
+impl Metadata {
+    fn from_mbtiles(metadata: martin_mbtiles::Metadata, tile_info: TileInfo) -> Self {
+        Metadata {
+            id: metadata.id,
+            tile_info,
+            layer_type: metadata.layer_type,
+            tilejson: metadata.tilejson,
+            json: metadata.json,
+            agg_tiles_hash: metadata.agg_tiles_hash,
+        }
+    }
+}
+
+fn serialize_tile_info<S: Serializer>(ti: &TileInfo, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+    let mut s = serializer.serialize_struct("TileInfo", 2)?;
+    s.serialize_field("format", &ti.format.to_string())?;
+    s.serialize_field("encoding", ti.encoding.compression().unwrap_or_default())?;
+    s.end()
+}
+
+/// Normalized MBTiles layout with `map` and `images` tables and hash view
+pub const NORMALIZED: MbtType = MbtType::Normalized {
+    hash_view: true,
+    schema: NormalizedSchema::Hash,
+};
 
 // Should be combined with bbox_feature_server::SqliteDatasource
 #[derive(Clone, Debug)]
@@ -42,8 +85,7 @@ impl MbtilesDatasource {
             Self::initialize_mbtiles_db(&mbtiles, metadata).await?;
             tile_info
         } else {
-            let metadata = Self::read_metadata(&mbtiles).await?;
-            metadata.tile_info
+            Self::read_metadata(&mbtiles).await?.tile_info
         };
         let format_info = format_info.unwrap_or(tile_info);
         let layout = Self::detect_layout(&mbtiles).await?;
@@ -62,8 +104,12 @@ impl MbtilesDatasource {
     async fn read_metadata(mbtiles: &Mbtiles) -> MbtResult<Metadata> {
         let mut conn = mbtiles.open_readonly().await?;
         let metadata = mbtiles.get_metadata(&mut conn).await?;
+        let tile_info = mbtiles
+            .detect_format(&metadata.tilejson, &mut conn)
+            .await?
+            .unwrap_or(TileInfo::new(TileFormat::Mvt, TileEncoding::Uncompressed));
         conn.close().await?;
-        Ok(metadata)
+        Ok(Metadata::from_mbtiles(metadata, tile_info))
     }
 
     async fn detect_tile_format(mbtiles: &Mbtiles) -> MbtResult<Option<TileInfo>> {
@@ -73,11 +119,7 @@ impl MbtilesDatasource {
             .await?;
         let tile_info = row.and_then(|row| {
             let data = row.get::<&[u8], _>(0);
-            let mut tile_info = TileInfo::detect(data);
-            if tile_info.is_none() && !data.is_empty() {
-                tile_info = Some(TileInfo::new(TileFormat::Mvt, TileEncoding::Uncompressed));
-            }
-            tile_info
+            (!data.is_empty()).then(|| TileInfo::detect(data))
         });
         conn.close().await?;
         Ok(tile_info)
@@ -97,7 +139,7 @@ impl MbtilesDatasource {
             // PRAGMA page_size = 512
             // PRAGMA encoding = 'UTF-8'
             // VACUUM
-            init_mbtiles_schema(&mut conn, MbtType::Normalized { hash_view: true }).await?;
+            init_mbtiles_schema(&mut conn, NORMALIZED, false).await?;
             // metadata content example:
             // ('name','Tilemaker to OpenTileMaps schema');
             // ('type','baselayer');
@@ -168,7 +210,8 @@ impl MbtilesDatasource {
 
     pub async fn get_metadata(&self) -> MbtResult<Metadata> {
         let mut conn = self.pool.acquire().await?;
-        self.mbtiles.get_metadata(&mut *conn).await
+        let metadata = self.mbtiles.get_metadata(&mut *conn).await?;
+        Ok(Metadata::from_mbtiles(metadata, self.format_info))
     }
 
     pub async fn get_tile(&self, z: u8, x: u32, y: u32) -> MbtResult<Option<Vec<u8>>> {

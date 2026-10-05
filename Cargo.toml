@@ -36,7 +36,7 @@ crs-definitions = "0.6.0"
 dyn-clone = "1.0.6"
 futures = "0.3.21"
 geo = "0.33.1"
-geozero = { version = "0.11.0" }
+geozero = { version = "0.15.1" }
 log = "0.4.17"
 minijinja = { version = "2.2.0", features = ["loader"] }
 num_cpus = "1.13.1"
@@ -49,8 +49,9 @@ opentelemetry = { version = "0.18", default-features = false, features = [
 prometheus = { version = "0.13", default-features = false }
 proj4rs = "0.2.0"
 regex = "1.13.1"
-reqwest = { version = "0.11.11", default-features = false, features = [
-    "rustls-tls",
+reqwest = { version = "0.13.5", default-features = false, features = [
+    "rustls",
+    "query",
 ] }
 roxmltree = "0.21.1"
 rstar = "0.13.0"
@@ -61,8 +62,9 @@ serde_urlencoded = "0.7.1"
 shapefile = "0.9.0"
 sxd-document = "0.3.2"
 sxd-xpath = "0.4.2"
-sqlx = { version = "0.7.0", default-features = false, features = [
-    "runtime-tokio-rustls",
+sqlx = { version = "0.8.6", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls-ring-webpki",
     "sqlite",
     "postgres",
     "chrono",

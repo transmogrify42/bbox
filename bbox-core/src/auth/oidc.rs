@@ -2,9 +2,9 @@ use super::Identity;
 use log::{debug, info};
 use openidconnect::{
     core::{CoreClient, CoreErrorResponseType, CoreProviderMetadata, CoreResponseType},
-    reqwest::async_http_client,
     AuthenticationFlow, AuthorizationCode, ClaimsVerificationError, ClientId, ClientSecret,
-    CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse, RedirectUrl, RequestTokenError, Scope,
+    ConfigurationError, CsrfToken, EndpointMaybeSet, EndpointNotSet, EndpointSet, HttpClientError,
+    IssuerUrl, Nonce, OAuth2TokenResponse, RedirectUrl, RequestTokenError, Scope,
     StandardErrorResponse,
 };
 use serde::{Deserialize, Serialize};
@@ -16,10 +16,12 @@ pub enum AuthError {
     OidcRequestTokenError(
         #[from]
         RequestTokenError<
-            openidconnect::reqwest::Error<reqwest::Error>,
+            HttpClientError<openidconnect::reqwest::Error>,
             StandardErrorResponse<CoreErrorResponseType>,
         >,
     ),
+    #[error(transparent)]
+    OidcConfigurationError(#[from] ConfigurationError),
     #[error(transparent)]
     OidcClaimsVerificationError(#[from] ClaimsVerificationError),
     #[error("Server did not return an ID token")]
@@ -38,9 +40,20 @@ pub struct OidcAuthCfg {
     pub groupinfo_claim: Option<String>,
 }
 
+/// Client from provider metadata (authorization endpoint set, token endpoint maybe set)
+type ProviderClient = CoreClient<
+    EndpointSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointMaybeSet,
+    EndpointMaybeSet,
+>;
+
 #[derive(Clone, Debug)]
 pub struct OidcClient {
-    client: CoreClient,
+    client: ProviderClient,
+    http_client: openidconnect::reqwest::Client,
     pub authorize_url: String,
     nonce: Nonce,
     username_claim: Option<String>,
@@ -53,9 +66,14 @@ impl OidcClient {
             "Fetching {}/.well-known/openid-configuration",
             &cfg.issuer_url
         );
+        // no redirects (SSRF protection, as recommended by openidconnect)
+        let http_client = openidconnect::reqwest::ClientBuilder::new()
+            .redirect(openidconnect::reqwest::redirect::Policy::none())
+            .build()
+            .expect("HTTP client");
         let provider_metadata = CoreProviderMetadata::discover_async(
             IssuerUrl::new(cfg.issuer_url.clone()).expect("Invalid issuer URL"),
-            async_http_client,
+            &http_client,
         )
         .await
         .expect("Failed to discover OpenID Provider");
@@ -86,6 +104,7 @@ impl OidcClient {
         let groupinfo_claim = cfg.groupinfo_claim.clone().unwrap_or("group".to_string());
         OidcClient {
             client,
+            http_client,
             authorize_url: authorize_url.to_string(),
             nonce,
             username_claim: cfg.username_claim.clone(),
@@ -108,8 +127,8 @@ impl AuthRequest {
         // Exchange the code with a token.
         let token_response = oidc
             .client
-            .exchange_code(code)
-            .request_async(async_http_client)
+            .exchange_code(code)?
+            .request_async(&oidc.http_client)
             .await?;
         debug!("IdP returned scopes: {:?}", token_response.scopes());
 

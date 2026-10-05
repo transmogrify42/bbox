@@ -5,7 +5,7 @@ use crate::store::{
 use async_trait::async_trait;
 use bbox_core::{Compression, Format, TileResponse};
 use log::debug;
-use martin_mbtiles::Metadata;
+use crate::mbtiles_ds::Metadata;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter};

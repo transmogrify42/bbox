@@ -46,7 +46,7 @@ impl MvtBuilder {
 /// MVT layer builder helper.
 pub struct MvtLayerBuilder {
     mvt_layer: mvt::tile::Layer,
-    tags: mvt::TagsBuilder<String>,
+    tags: mvt::TagsBuilder,
 }
 
 impl MvtLayerBuilder {

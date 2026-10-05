@@ -9,7 +9,7 @@ use crate::mbtiles_ds::MbtilesDatasource;
 use crate::store::TileReader;
 use async_trait::async_trait;
 use bbox_core::Format;
-use martin_mbtiles::Metadata;
+use crate::mbtiles_ds::Metadata;
 use tile_grid::{Tms, Xyz};
 use tilejson::TileJSON;
 

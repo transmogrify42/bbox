@@ -3,7 +3,7 @@ use crate::store::{NoStore, StoreFromConfig, TileReader, TileStore, TileStoreErr
 use async_trait::async_trait;
 use bbox_core::{Compression, Format, TileResponse};
 use log::{info, warn};
-use martin_mbtiles::Metadata;
+use crate::mbtiles_ds::Metadata;
 use pmtiles::{
     async_reader::AsyncPmTilesReader, MmapBackend, PmTilesStreamWriter, PmTilesWriter, TileType,
 };

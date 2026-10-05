@@ -1,0 +1,50 @@
+# Minimal Alpine image of a BBOX service (default: bbox-server with all default services)
+#
+#   docker build -f docker/Dockerfile-alpine -t bbox:alpine .
+#   docker build -f docker/Dockerfile-alpine --build-arg BUILD_DIR=bbox-feature-server -t bbox-feature-server:alpine .
+
+# ------------------------------------------------------------------------------
+# Build Stage
+# ------------------------------------------------------------------------------
+FROM rust:1.99-alpine3.24 AS builder
+
+# cmake, perl, build-base: aws-lc-rs (rustls crypto provider of reqwest)
+RUN apk add --no-cache musl-dev pkgconfig protobuf-dev build-base cmake perl
+
+WORKDIR /build
+COPY . .
+
+ARG BUILD_DIR=bbox-server
+ARG BUILD_FEATURES=""
+
+RUN cargo install --locked $BUILD_FEATURES --path $BUILD_DIR --root /out \
+    && strip /out/bin/*
+
+# ------------------------------------------------------------------------------
+# Runtime Stage
+# ------------------------------------------------------------------------------
+FROM alpine:3.24
+
+ARG BUILD_DIR=bbox-server
+ARG BBOX_VERSION=unknown
+ARG WFS_VERSION=unknown
+LABEL org.opencontainers.image.title="$BUILD_DIR" \
+      org.opencontainers.image.version="$BBOX_VERSION-wfs$WFS_VERSION" \
+      org.opencontainers.image.source="https://github.com/transmogrify42/bbox" \
+      org.opencontainers.image.licenses="MIT OR Apache-2.0"
+
+# apk upgrade: latest security fixes of the base image packages
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates tzdata \
+    && addgroup -S -g 1000 bbox \
+    && adduser -S -D -H -u 1000 -G bbox bbox
+
+COPY --from=builder /out/bin/$BUILD_DIR /usr/local/bin/$BUILD_DIR
+RUN ln -s $BUILD_DIR /usr/local/bin/bbox-app
+
+WORKDIR /var/www
+USER bbox
+ENV BBOX_WEBSERVER__SERVER_ADDR="0.0.0.0:8080"
+EXPOSE 8080
+ENTRYPOINT ["bbox-app"]
+CMD ["serve"]

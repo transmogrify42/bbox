@@ -725,7 +725,7 @@ impl Decoder {
                     let geometry = match self.geom_encoding[i] {
                         Some(GeomEncoding::Wkt) => {
                             use geozero::ToGeo;
-                            geozero::wkt::WktStr(&text).to_geo().map_err(ch_err)?
+                            geozero::wkt::Wkt(&text).to_geo().map_err(ch_err)?
                         }
                         _ => {
                             let bytes =

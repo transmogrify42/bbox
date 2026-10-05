@@ -11,7 +11,8 @@ use crate::store::s3::S3StoreError;
 use async_trait::async_trait;
 use bbox_core::{Compression, Format, TileResponse};
 use dyn_clone::{clone_trait_object, DynClone};
-use martin_mbtiles::{MbtError, Metadata};
+use crate::mbtiles_ds::Metadata;
+use martin_mbtiles::MbtError;
 use std::path::{Path, PathBuf};
 use tile_grid::Xyz;
 

@@ -337,7 +337,7 @@ impl TileSource for PgSource {
             let query_limit = layer.query_limit.unwrap_or(0);
             while let Some(row) = rows.try_next().await? {
                 let Some(wkb) =
-                    row.try_get::<Option<wkb::Ewkb>, _>(query_info.geometry_field.as_str())?
+                    row.try_get::<Option<wkb::Ewkb<Vec<u8>>>, _>(query_info.geometry_field.as_str())?
                 else {
                     // Skip NULL geometries
                     continue;
@@ -725,7 +725,7 @@ mod tests {
         // });
         let geoms = rows
             .iter()
-            .map(|row| row.try_get::<Option<wkb::Ewkb>, _>("wkb_geometry").unwrap())
+            .map(|row| row.try_get::<Option<wkb::Ewkb<Vec<u8>>>, _>("wkb_geometry").unwrap())
             .collect::<Vec<_>>();
         assert_eq!(geoms.len(), 2);
         assert!(geoms[0].is_some());

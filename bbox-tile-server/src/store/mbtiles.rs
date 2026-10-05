@@ -4,7 +4,8 @@ use crate::store::{StoreFromConfig, TileReader, TileStore, TileStoreError, TileW
 use async_trait::async_trait;
 use bbox_core::{Compression, Format, TileResponse};
 use log::info;
-use martin_mbtiles::{invert_y_value, Metadata};
+use crate::mbtiles_ds::Metadata;
+use martin_mbtiles::invert_y_value;
 use martin_tile_utils::Format as TileFormat;
 use sqlx::{Acquire, Executor, Statement};
 use std::ffi::OsStr;
@@ -89,10 +90,7 @@ impl TileWriter for MbtilesDatasource {
         //         &[(xyz.z, xyz.x as u32, xyz.y as u32, data)],
         //     )
         //     .await?;
-        debug_assert_eq!(
-            self.layout,
-            martin_mbtiles::MbtType::Normalized { hash_view: true }
-        );
+        debug_assert_eq!(self.layout, crate::mbtiles_ds::NORMALIZED);
         // TODO: common code with put_tiles
         let mut tx = conn.begin().await?;
         let sql2 = tx
@@ -178,7 +176,7 @@ impl TileReader for MbtilesDatasource {
             if self.format_info.format == TileFormat::Mvt {
                 response.set_content_type("application/x-protobuf");
             }
-            if let Some(encoding) = self.format_info.encoding.content_encoding() {
+            if let Some(encoding) = self.format_info.encoding.compression() {
                 response.insert_header(("Content-Encoding", encoding));
             }
             let body = Box::new(Cursor::new(content));
