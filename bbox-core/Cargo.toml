@@ -18,6 +18,8 @@ oidc = ["openidconnect", "reqwest"]
 
 [dependencies]
 actix-cors = "0.7.0"
+actix-http = { workspace = true }
+actix-service = { workspace = true }
 actix-session = { version = "0.10.0", features = ["cookie-session"] }
 actix-web = { workspace = true }
 actix-web-opentelemetry = { version = "0.13", features = [
@@ -26,6 +28,7 @@ actix-web-opentelemetry = { version = "0.13", features = [
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 base64ct = "~1.7" # 1.8.0 has edition2024 feature, which breaks doc build
+bytes = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 env_logger = "0.11.5"
@@ -54,6 +57,7 @@ serde_json = { workspace = true }
 serde_yaml = "0.9.34"
 sqlx = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["net"] }
 
 [dev-dependencies]
 

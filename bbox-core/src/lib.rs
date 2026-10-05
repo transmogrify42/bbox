@@ -5,6 +5,7 @@ pub mod config;
 pub mod endpoints;
 pub mod file_search;
 mod formats;
+pub mod lenient_http;
 pub mod logger;
 pub mod metrics;
 pub mod ogcapi;

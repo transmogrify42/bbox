@@ -11,6 +11,7 @@ use bbox_core::NamedObjectStore;
 use dyn_clone::{clone_trait_object, DynClone};
 use std::env;
 
+pub mod clickhouse;
 pub mod gpkg;
 pub mod postgis;
 
@@ -39,6 +40,10 @@ pub trait CollectionSource: DynClone + Sync + Send {
         feature_id: &str,
     ) -> Result<Option<CoreFeature>>;
     async fn queryables(&self, collection_id: &str) -> Result<Option<Queryables>>;
+    /// Source description for the WFS feature store
+    fn wfs_source(&self) -> Option<crate::wfs::store::SourceDesc> {
+        None
+    }
 }
 
 clone_trait_object!(CollectionSource);
@@ -48,6 +53,7 @@ clone_trait_object!(CollectionSource);
 pub struct Datasources {
     pg_datasources: NamedObjectStore<postgis::Datasource>,
     gpkg_datasources: NamedObjectStore<gpkg::Datasource>,
+    ch_datasources: NamedObjectStore<clickhouse::Datasource>,
 }
 
 impl Datasources {
@@ -57,7 +63,7 @@ impl Datasources {
         for named_ds in datasources {
             // TODO: check duplicate names
             // TODO: move into core, combined with tile-server Datasource
-            let envar = env::var(format!("BBOX_DATASOURCE_{}", &named_ds.name.to_uppercase())).ok();
+            let envar = env::var(format!("BBOX_DATASOURCE_{}", named_ds.name.to_uppercase())).ok();
             match &named_ds.datasource {
                 DatasourceCfg::Postgis(cfg) => {
                     let ds = postgis::Datasource::from_config(cfg, envar)
@@ -68,6 +74,10 @@ impl Datasources {
                 DatasourceCfg::Gpkg(cfg) => {
                     let ds = gpkg::Datasource::from_config(cfg).await?;
                     ds_handler.gpkg_datasources.add(&named_ds.name, ds);
+                }
+                DatasourceCfg::Clickhouse(cfg) => {
+                    let ds = clickhouse::Datasource::from_config(cfg, envar).await?;
+                    ds_handler.ch_datasources.add(&named_ds.name, ds);
                 }
                 _ => { /* ignore others */ }
             }
@@ -83,6 +93,18 @@ impl Datasources {
             CollectionSourceCfg::Postgis(cfg) => {
                 let source = self
                     .pg_datasources
+                    .get_or_default_mut(cfg.datasource.as_deref())
+                    .ok_or(Error::DatasourceNotFound(
+                        cfg.datasource
+                            .as_ref()
+                            .unwrap_or(&"(default)".to_string())
+                            .clone(),
+                    ))?;
+                source.setup_collection(collection, base_url, None).await
+            }
+            CollectionSourceCfg::Clickhouse(ref cfg) => {
+                let source = self
+                    .ch_datasources
                     .get_or_default_mut(cfg.datasource.as_deref())
                     .ok_or(Error::DatasourceNotFound(
                         cfg.datasource

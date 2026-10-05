@@ -6,8 +6,9 @@ Features:
 - [x] OGC API - Features - Part 1: Core 1.0
 - [ ] OGC API - Features - Part 2: Coordinate Reference Systems by Reference 1.0
 - [x] OpenAPI endpoint
-- [x] Builtin storage backends: PostGIS, GeoPackage
+- [x] Builtin storage backends: PostGIS, GeoPackage, ClickHouse
 - [x] Output formats: GeoJSON
+- [x] WFS 1.0.0, 1.1.0, 2.0.0 (read-only) with GML 2/3.1/3.2, GeoJSON, CSV, Shapefile and KML output
 
 
 ## Configuration

@@ -92,12 +92,12 @@ impl Inventory {
                     match ds.collections(inventory.href_prefix()).await {
                         Ok(collections) => inventory.add_collections(collections),
                         Err(e) => {
-                            warn!("Failed to scan feature collections for '{}': {e}", &cfg.url)
+                            warn!("Failed to scan feature collections for '{}': {e}", cfg.url)
                         }
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to create connection pool for '{}': {e}", &cfg.url);
+                    warn!("Failed to create connection pool for '{}': {e}", cfg.url);
                     continue;
                 }
             }
@@ -125,6 +125,13 @@ impl Inventory {
             .values()
             .map(|fc| fc.collection.clone())
             .collect()
+    }
+
+    /// All collections with their sources
+    pub fn feature_collections(&self) -> Vec<&FeatureCollection> {
+        let mut fcs: Vec<&FeatureCollection> = self.feat_collections.values().collect();
+        fcs.sort_by(|a, b| a.collection.id.cmp(&b.collection.id));
+        fcs
     }
 
     pub fn core_collection(&self, collection_id: &str) -> Option<&CoreCollection> {

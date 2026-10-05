@@ -10,9 +10,10 @@ Asynchronous OGC API Features server implementation.
 Features:
 - [x] OGC API - Features - Part 1: Core 1.0
 - [ ] OGC API - Features - Part 2: Coordinate Reference Systems by Reference 1.0
-- [x] Builtin storage backends: PostGIS, GeoPackage
+- [x] Builtin storage backends: PostGIS, GeoPackage, ClickHouse
 - [x] SQL queries with time and custom query parameters 
 - [x] Output formats: GeoJSON
+- [x] WFS 1.0.0, 1.1.0, 2.0.0 (read-only) with GML 2/3.1/3.2, GeoJSON, CSV, Shapefile and KML output
 - [x] Compatibility: WFS + WFS-T via QGIS Server
 
 

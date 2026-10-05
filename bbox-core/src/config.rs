@@ -266,6 +266,8 @@ pub enum DatasourceCfg {
     Postgis(DsPostgisCfg),
     #[serde(rename = "gpkg")]
     Gpkg(DsGpkgCfg),
+    #[serde(rename = "clickhouse")]
+    Clickhouse(DsClickhouseCfg),
     // GdalData(GdalSource),
     // -- raster sources --
     WmsFcgi,
@@ -284,6 +286,14 @@ pub struct DsPostgisCfg {
     pub url: String,
     // pub pool: Option<u16>,
     // pub connection_timeout: Option<u64>,
+}
+
+/// ClickHouse connection: `tcp://user:password@host:9000/database` (native protocol)
+/// or `http(s)://user:password@host:8123/database` (HTTP interface)
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DsClickhouseCfg {
+    pub url: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

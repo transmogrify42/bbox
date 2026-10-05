@@ -17,24 +17,39 @@ html = ["bbox-core/html"]
 
 [dependencies]
 actix-web = { workspace = true }
+async-stream = { workspace = true }
 async-trait = { workspace = true }
 bbox-core = { path = "../bbox-core", version = "0.6.2" }
 chrono = { workspace = true }
 clap = { workspace = true }
+clickhouse-arrow = { workspace = true }
+crs-definitions = { workspace = true }
 dyn-clone = { workspace = true }
 futures = { workspace = true }
+geo = { workspace = true }
 geozero = { workspace = true, features = [ "with-gpkg", "with-postgis-sqlx" ] }
 log = { workspace = true }
 minijinja = { workspace = true }
 once_cell = { workspace = true }
+proj4rs = { workspace = true, features = ["crs-definitions", "geo-types"] }
+reqwest = { workspace = true, features = ["stream"] }
+regex = { workspace = true }
+roxmltree = { workspace = true }
+rstar = { workspace = true }
 rust-embed = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = { workspace = true }
+shapefile = { workspace = true, features = ["geo-types"] }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
+zip = { workspace = true }
 
 [dev-dependencies]
+sxd-document = { workspace = true }
+sxd-xpath = { workspace = true }
+tempfile = { workspace = true }
+toml = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 test-log = "0.2.14"
 

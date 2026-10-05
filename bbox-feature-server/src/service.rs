@@ -11,6 +11,7 @@ use bbox_core::service::OgcApiService;
 #[derive(Clone)]
 pub struct FeatureService {
     pub inventory: Inventory,
+    pub wfs: Option<std::sync::Arc<crate::wfs::WfsService>>,
 }
 #[async_trait]
 impl OgcApiService for FeatureService {
@@ -33,7 +34,14 @@ impl OgcApiService for FeatureService {
                 .unwrap_or_else(error_exit);
             inventory.add_collection(collection);
         }
-        FeatureService { inventory }
+        let wfs = if config.wfs.enabled {
+            Some(std::sync::Arc::new(
+                crate::wfs::WfsService::create(&config.wfs, &inventory).await,
+            ))
+        } else {
+            None
+        };
+        FeatureService { inventory, wfs }
     }
     fn conformance_classes(&self) -> Vec<String> {
         let mut classes = vec![

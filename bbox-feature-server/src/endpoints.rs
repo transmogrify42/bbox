@@ -199,6 +199,9 @@ static TEMPLATES: Lazy<Environment<'static>> = Lazy::new(create_env_embedded::<T
 
 impl ServiceEndpoints for FeatureService {
     fn register_endpoints(&self, cfg: &mut web::ServiceConfig) {
+        if let Some(wfs) = &self.wfs {
+            crate::wfs::endpoint::register(cfg, wfs.clone());
+        }
         cfg.app_data(web::Data::new(self.inventory.clone()))
             .service(web::resource("/collections").route(web::get().to(collections)))
             .service(web::resource("/collections.json").route(web::get().to(collections)))

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Application schema for the synthetic observations table: `label` is mandatory but nillable,
+     so NULL values are encoded as xsi:nil="true" (FES PropertyIsNil). -->
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:gml="http://www.opengis.net/gml/3.2"
+  xmlns:app="http://example.com/app" targetNamespace="http://example.com/app"
+  elementFormDefault="qualified" version="1.0">
+  <xsd:import namespace="http://www.opengis.net/gml/3.2"/>
+  <xsd:element name="observations" type="app:observationsType" substitutionGroup="gml:AbstractFeature"/>
+  <xsd:complexType name="observationsType">
+    <xsd:complexContent>
+      <xsd:extension base="gml:AbstractFeatureType">
+        <xsd:sequence>
+          <xsd:element name="geom" type="gml:PointPropertyType" minOccurs="0"/>
+          <xsd:element name="image_id" type="xsd:string"/>
+          <xsd:element name="acquired" type="xsd:dateTime" minOccurs="0"/>
+          <xsd:element name="cloud" type="xsd:double" minOccurs="0"/>
+          <xsd:element name="label" type="xsd:string" nillable="true"/>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+</xsd:schema>

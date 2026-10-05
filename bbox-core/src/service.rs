@@ -280,7 +280,7 @@ pub async fn run_service<T: OgcApiService + ServiceEndpoints + Sync + 'static>(
     let server_addr = core.server_addr().to_string();
     let tls_config = core.tls_config();
     let api_scope = extract_api_scope(core.web_config.public_server_url.as_deref());
-    let mut server = HttpServer::new(move || {
+    let app_factory = move || {
         App::new().service(
             web::scope(&api_scope)
                 .configure(|cfg| core.register_endpoints(cfg))
@@ -297,15 +297,19 @@ pub async fn run_service<T: OgcApiService + ServiceEndpoints + Sync + 'static>(
                 .wrap(middleware::NormalizePath::trim())
                 .wrap(middleware::Logger::default()),
         )
-    });
+    };
     if let Some(tls_config) = tls_config {
         info!("Starting web server at https://{server_addr}");
-        server = server.bind_rustls(server_addr, tls_config)?;
+        HttpServer::new(app_factory)
+            .bind_rustls(server_addr, tls_config)?
+            .workers(workers)
+            .run()
+            .await
     } else {
         info!("Starting web server at http://{server_addr}");
-        server = server.bind(server_addr)?;
+        // like HttpServer::bind, accepting raw UTF-8 in request targets
+        crate::lenient_http::http_server(app_factory, &server_addr, workers, 30)?.await
     }
-    server.workers(workers).run().await
 }
 
 pub fn extract_api_scope(public_server_url: Option<&str>) -> String {

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+* Read-only WFS 1.0.0, 1.1.0 and 2.0.0 at `/wfs` (KVP, XML and SOAP encodings, stored queries,
+  joins, inheritance, xlink resolution, response paging, FES 2.0 / Filter 1.x and CQL filters
+  translated to SQL), passing the OGC ets-wfs10, ets-wfs20 and DGIWG test suites
+* WFS output formats GML 2/3.1/3.2, GeoJSON, CSV, Shapefile, KML; 3D coordinates
+* GeoServer compatible vendor parameters and format options
+* Optional WFS response and count caching, ETag/304 for capabilities and schemas
+* ClickHouse datasource (native and HTTP protocol)
+* Geometryless GeoPackage tables are served as collections
+* Web server accepts request targets with unencoded UTF-8 characters
+
 ## 0.6.2 (2024-11-14)
 
 * Add support for URL prefix for backend and endpoints

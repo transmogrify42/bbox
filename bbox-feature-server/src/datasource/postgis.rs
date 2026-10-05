@@ -28,7 +28,7 @@ impl CollectionDatasource for PgDatasource {
         base_url: &str,
         _extent: Option<CoreExtent>,
     ) -> Result<FeatureCollection> {
-        info!("Setup Postgis Collection `{}`", &cfg.name);
+        info!("Setup Postgis Collection `{}`", cfg.name);
         let CollectionSourceCfg::Postgis(ref srccfg) = cfg.source else {
             panic!();
         };
@@ -98,8 +98,18 @@ impl CollectionDatasource for PgDatasource {
             other_columns.insert(k.clone(), queryable_type);
         }
 
+        let (table_schema, table_name) = if srccfg.sql.is_none() {
+            (
+                Some(srccfg.table_schema.clone().unwrap_or("public".to_string())),
+                srccfg.table_name.clone(),
+            )
+        } else {
+            (None, None)
+        };
         let source = PgCollectionSource {
             ds: self.clone(),
+            table_schema,
+            table_name,
             sql,
             geometry_column,
             pk_column,
@@ -190,6 +200,8 @@ impl AutoscanCollectionDatasource for PgDatasource {
 #[derive(Clone, Debug)]
 pub struct PgCollectionSource {
     ds: PgDatasource,
+    table_schema: Option<String>,
+    table_name: Option<String>,
     sql: String,
     geometry_column: String,
     /// Primary key column, None if multi column key.
@@ -206,7 +218,7 @@ impl CollectionSource for PgCollectionSource {
         let geometry_column = &self.geometry_column;
         let temporal_column = &self.temporal_column;
         let mut builder: QueryBuilder<Postgres> =
-            QueryBuilder::new(format!("WITH query AS ({sql})\n", sql = &self.sql));
+            QueryBuilder::new(format!("WITH query AS ({sql})\n", sql = self.sql));
         let select_sql = if let Some(pk) = &self.pk_column {
             format!(
                 r#"SELECT to_jsonb(t.*)-'{geometry_column}'-'{pk}' AS properties, ST_AsGeoJSON({geometry_column})::jsonb AS geometry,
@@ -396,8 +408,8 @@ impl CollectionSource for PgCollectionSource {
                 "{pk}"::varchar AS pk
                FROM query t
                WHERE {pk}::varchar = '{feature_id}'"#,
-            sql = &self.sql,
-            geometry_column = &self.geometry_column,
+            sql = self.sql,
+            geometry_column = self.geometry_column,
         );
         if let Some(row) = sqlx::query(&sql)
             // .bind(feature_id)
@@ -452,6 +464,16 @@ impl CollectionSource for PgCollectionSource {
             properties,
         }))
     }
+
+    fn wfs_source(&self) -> Option<crate::wfs::store::SourceDesc> {
+        Some(crate::wfs::store::SourceDesc::Postgis {
+            pool: self.ds.pool.clone(),
+            schema: self.table_schema.clone(),
+            table: self.table_name.clone(),
+            sql: self.sql.clone(),
+            pk: self.pk_column.clone(),
+        })
+    }
 }
 
 fn row_to_feature(row: &PgRow, _table_info: &PgCollectionSource) -> Result<CoreFeature> {
@@ -492,8 +514,8 @@ impl PgCollectionSource {
         SELECT ST_XMin(bbox), ST_YMin(bbox), ST_XMax(bbox), ST_YMax(bbox)
         FROM extent
     "#,
-            sql = &self.sql,
-            geometry_column = &self.geometry_column,
+            sql = self.sql,
+            geometry_column = self.geometry_column,
         );
         let row = sqlx::query(sql).fetch_one(&self.ds.pool).await?;
         let extent: Vec<f64> = vec![
@@ -619,6 +641,8 @@ mod tests {
             .unwrap();
         let source = PgCollectionSource {
             ds,
+            table_schema: None,
+            table_name: None,
             sql: "SELECT * FROM ne_10m_rivers_lake_centerlines".to_string(),
             geometry_column: "wkb_geometry".to_string(),
             pk_column: Some("fid".to_string()),
@@ -644,6 +668,8 @@ mod tests {
             .unwrap();
         let source = PgCollectionSource {
             ds,
+            table_schema: None,
+            table_name: None,
             sql: "SELECT * FROM ne_10m_rivers_lake_centerlines".to_string(),
             geometry_column: "wkb_geometry".to_string(),
             pk_column: Some("fid".to_string()),
@@ -663,6 +689,8 @@ mod tests {
             .unwrap();
         let source = PgCollectionSource {
             ds,
+            table_schema: None,
+            table_name: None,
             sql: "SELECT *, '2024-01-01 00:00:00Z'::timestamptz - (fid-1) * INTERVAL '1 day' AS ts FROM ne_10m_rivers_lake_centerlines ORDER BY fid".to_string(),
             geometry_column: "wkb_geometry".to_string(),
             pk_column: Some("fid".to_string()),
@@ -708,6 +736,8 @@ mod tests {
             [("name".to_string(), QueryableType::String)].into();
         let source = PgCollectionSource {
             ds,
+            table_schema: None,
+            table_name: None,
             sql: "SELECT *, '2024-01-01 00:00:00Z'::timestamptz - (fid-1) * INTERVAL '1 day' AS ts FROM ne_10m_rivers_lake_centerlines".to_string(),
             geometry_column: "wkb_geometry".to_string(),
             pk_column: Some("fid".to_string()),

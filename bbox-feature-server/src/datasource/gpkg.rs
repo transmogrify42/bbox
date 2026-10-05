@@ -50,7 +50,7 @@ impl CollectionDatasource for SqliteDatasource {
         base_url: &str,
         extent: Option<CoreExtent>,
     ) -> Result<FeatureCollection> {
-        info!("Setup Gpkg Collection `{}`", &cfg.name);
+        info!("Setup Gpkg Collection `{}`", cfg.name);
         let CollectionSourceCfg::Gpkg(ref srccfg) = cfg.source else {
             panic!();
         };
@@ -68,19 +68,14 @@ impl CollectionDatasource for SqliteDatasource {
                 .fid_field
                 .clone()
                 .or(detect_pk(self, table_name).await?);
+            // None: table without geometry (GeoPackage attributes table)
             let geometry_column = detect_geometry(self, table_name).await?;
             let sql = check_query(self, format!("SELECT * FROM {table_name}")).await?;
             (pk_column, geometry_column, sql)
         } else {
             let pk_column = srccfg.fid_field.clone();
             // TODO: We should also allow user queries without geometry
-            let geometry_column =
-                srccfg
-                    .geometry_field
-                    .clone()
-                    .ok_or(Error::DatasourceSetupError(format!(
-                        "Datasource `{id}`: configuration `geometry_field` missing"
-                    )))?;
+            let geometry_column = srccfg.geometry_field.clone();
             let sql = check_query(self, srccfg.sql.clone().expect("config checked")).await?;
             (pk_column, geometry_column, sql)
         };
@@ -89,6 +84,11 @@ impl CollectionDatasource for SqliteDatasource {
         }
         let source = GpkgCollectionSource {
             ds: self.clone(),
+            table_name: if srccfg.sql.is_none() {
+                srccfg.table_name.clone()
+            } else {
+                None
+            },
             sql,
             geometry_column,
             pk_column,
@@ -125,23 +125,21 @@ impl AutoscanCollectionDatasource for SqliteDatasource {
         let sql = r#"
             SELECT contents.*
             FROM gpkg_contents contents
-              JOIN gpkg_spatial_ref_sys refsys ON refsys.srs_id = contents.srs_id
-              --JOIN gpkg_geometry_columns geom_cols ON geom_cols.table_name = contents.table_name
-            WHERE data_type='features'
+              LEFT JOIN gpkg_spatial_ref_sys refsys ON refsys.srs_id = contents.srs_id
+            WHERE data_type='features' AND refsys.srs_id IS NOT NULL OR data_type='attributes'
         "#;
         let mut rows = sqlx::query(sql).fetch(&self.pool);
         while let Some(row) = rows.try_next().await? {
             let table_name: &str = row.try_get("table_name")?;
             let id = table_name.to_string();
             let title: String = row.try_get("identifier")?;
+            let bbox: Option<Vec<f64>> = ["min_x", "min_y", "max_x", "max_y"]
+                .iter()
+                .map(|c| row.try_get::<Option<f64>, _>(*c).ok().flatten())
+                .collect();
             let extent = CoreExtent {
-                spatial: Some(CoreExtentSpatial {
-                    bbox: vec![vec![
-                        row.try_get("min_x")?,
-                        row.try_get("min_y")?,
-                        row.try_get("max_x")?,
-                        row.try_get("max_y")?,
-                    ]],
+                spatial: bbox.map(|bbox| CoreExtentSpatial {
+                    bbox: vec![bbox],
                     crs: None,
                 }),
                 temporal: None,
@@ -169,8 +167,11 @@ impl AutoscanCollectionDatasource for SqliteDatasource {
 #[derive(Clone, Debug)]
 pub struct GpkgCollectionSource {
     ds: SqliteDatasource,
+    /// Table name, if not a custom query
+    table_name: Option<String>,
     sql: String,
-    geometry_column: String,
+    /// None: table without geometry
+    geometry_column: Option<String>,
     // geometry_type_name: String,
     /// Primary key column, None if multi column key.
     pk_column: Option<String>,
@@ -183,7 +184,7 @@ impl CollectionSource for GpkgCollectionSource {
             "
             WITH query AS ({sql})
             SELECT *, count(*) OVER() AS __total_cnt FROM query",
-            sql = &self.sql
+            sql = self.sql
         );
         if let Some(_bboxstr) = &filter.bbox {
             warn!("Ignoring bbox filter (not supported for this datasource)");
@@ -228,7 +229,7 @@ impl CollectionSource for GpkgCollectionSource {
             "
             WITH query AS ({sql})
             SELECT * FROM query WHERE {pk} = ?",
-            sql = &self.sql
+            sql = self.sql
         );
         if let Some(row) = sqlx::query(&sql)
             .bind(feature_id)
@@ -263,6 +264,15 @@ impl CollectionSource for GpkgCollectionSource {
     async fn queryables(&self, _collection_id: &str) -> Result<Option<Queryables>> {
         Ok(None)
     }
+
+    fn wfs_source(&self) -> Option<crate::wfs::store::SourceDesc> {
+        Some(crate::wfs::store::SourceDesc::Gpkg {
+            pool: self.ds.pool.clone(),
+            table: self.table_name.clone(),
+            sql: self.sql.clone(),
+            pk: self.pk_column.clone(),
+        })
+    }
 }
 
 fn row_to_feature(row: &SqliteRow, table_info: &GpkgCollectionSource) -> Result<CoreFeature> {
@@ -270,7 +280,7 @@ fn row_to_feature(row: &SqliteRow, table_info: &GpkgCollectionSource) -> Result<
     let mut properties = json!({});
     for col in row.columns() {
         #[allow(clippy::if_same_then_else)]
-        if col.name() == table_info.geometry_column {
+        if Some(col.name()) == table_info.geometry_column.as_deref() {
             // Skip geometry
         } else if col.name() == "__total_cnt" {
             // Skip count
@@ -291,14 +301,19 @@ fn row_to_feature(row: &SqliteRow, table_info: &GpkgCollectionSource) -> Result<
             }
         }
     }
-    let wkb: wkb::Decode<geojson::GeoJsonString> =
-        row.try_get(table_info.geometry_column.as_str())?;
-    let geom = wkb.geometry.ok_or(error::Error::GeometryFormatError)?;
+    let geometry = match &table_info.geometry_column {
+        Some(col) => {
+            let wkb: wkb::Decode<geojson::GeoJsonString> = row.try_get(col.as_str())?;
+            let geom = wkb.geometry.ok_or(error::Error::GeometryFormatError)?;
+            serde_json::from_str(&geom.0).map_err(|_| error::Error::GeometryFormatError)?
+        }
+        None => serde_json::Value::Null,
+    };
 
     let item = CoreFeature {
         type_: "Feature".to_string(),
         id,
-        geometry: serde_json::from_str(&geom.0).map_err(|_| error::Error::GeometryFormatError)?,
+        geometry,
         properties: Some(properties),
         links: vec![],
     };
@@ -326,20 +341,23 @@ async fn detect_pk(ds: &SqliteDatasource, table: &str) -> Result<Option<String>>
     Ok(pk_column)
 }
 
-async fn detect_geometry(ds: &SqliteDatasource, table: &str) -> Result<String> {
+async fn detect_geometry(ds: &SqliteDatasource, table: &str) -> Result<Option<String>> {
     let sql = r#"
         SELECT column_name, geometry_type_name
         FROM gpkg_geometry_columns
         WHERE table_name = ?
     "#;
-    let row = sqlx::query(sql)
+    let Some(row) = sqlx::query(sql)
         .bind(table)
         // We take the first result only
-        .fetch_one(&ds.pool)
-        .await?;
+        .fetch_optional(&ds.pool)
+        .await?
+    else {
+        return Ok(None);
+    };
     let geometry_column: String = row.try_get("column_name")?;
     let _geometry_type_name: String = row.try_get("geometry_type_name")?;
-    Ok(geometry_column)
+    Ok(Some(geometry_column))
 }
 
 async fn check_query(ds: &SqliteDatasource, sql: String) -> Result<String> {
@@ -383,8 +401,9 @@ mod tests {
             .unwrap();
         let source = GpkgCollectionSource {
             ds,
+            table_name: Some("ne_10m_lakes".to_string()),
             sql: "SELECT * FROM ne_10m_lakes".to_string(),
-            geometry_column: "geom".to_string(),
+            geometry_column: Some("geom".to_string()),
             pk_column: Some("fid".to_string()),
         };
         let items = source.items(&filter).await.unwrap();
