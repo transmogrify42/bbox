@@ -2,6 +2,11 @@
 #
 #   docker build -f docker/Dockerfile-alpine -t bbox:alpine .
 #   docker build -f docker/Dockerfile-alpine --build-arg BUILD_DIR=bbox-feature-server -t bbox-feature-server:alpine .
+#
+# Multi-arch release (amd64 + arm64):
+#   docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile-alpine \
+#     --build-arg BBOX_VERSION=0.6.2 --build-arg WFS_VERSION=0.1.0 \
+#     -t gogeospatial/bbox:0.6.2-wfs0.1.0 -t gogeospatial/bbox:latest --push .
 
 # ------------------------------------------------------------------------------
 # Build Stage
