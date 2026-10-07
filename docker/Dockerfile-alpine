@@ -45,6 +45,8 @@ RUN apk upgrade --no-cache \
     && adduser -S -D -H -u 1000 -G bbox bbox
 
 COPY --from=builder /out/bin/$BUILD_DIR /usr/local/bin/$BUILD_DIR
+# Documentation (e.g. /usr/share/doc/bbox/feature-server/wfs-layers.md)
+COPY website/content/docs /usr/share/doc/bbox
 RUN ln -s $BUILD_DIR /usr/local/bin/bbox-app
 
 WORKDIR /var/www
