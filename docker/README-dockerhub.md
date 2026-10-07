@@ -28,11 +28,12 @@ overridden with environment variables, e.g. `-e BBOX_WFS__TITLE="My WFS"`.
 ## Adding a WFS layer
 
 Every feature server collection is published as a WFS feature type. To add a layer, declare a
-datasource and a collection in `bbox.toml`:
+datasource and a collection in `bbox.toml`. Datasources can be GeoPackage, PostGIS or
+ClickHouse.
+
+### GeoPackage
 
 ```toml
-# GeoPackage (or [datasource.postgis] url = "postgresql://...",
-# or [datasource.clickhouse] url = "tcp://user:pw@host:9000/db")
 [[datasource]]
 name = "basedata"
 [datasource.gpkg]
@@ -57,6 +58,78 @@ sql = "SELECT fid, name, class, geom FROM roads WHERE class = 'motorway'"
 geometry_field = "geom"
 fid_field = "fid"
 ```
+
+### PostGIS
+
+```toml
+[[datasource]]
+name = "gisdb"
+[datasource.postgis]
+url = "postgresql://user:password@dbhost:5432/gis"
+
+# Layer from a table (feature id and geometry column detected from geometry_columns)
+[[collection]]
+name = "buildings"
+title = "Buildings"
+[collection.postgis]
+datasource = "gisdb"
+table_schema = "public"
+table_name = "buildings"
+
+# Layer from a SQL query
+[[collection]]
+name = "tall_buildings"
+title = "Tall buildings"
+[collection.postgis]
+datasource = "gisdb"
+sql = "SELECT id, name, height, geom FROM public.buildings WHERE height > 50"
+geometry_field = "geom"
+fid_field = "id"
+```
+
+Filters on plain columns (e.g. `cql_filter=height>100`) are sent to PostGIS with bound
+parameters, so indexes on those columns are used. For a database on the Docker host use
+`dbhost` = `host.docker.internal` (Docker Desktop) or run with `--network host` (Linux).
+
+### ClickHouse
+
+Native protocol (`tcp://`, port 9000) or HTTP (`http://`, port 8123); the database is the URL
+path.
+
+```toml
+[[datasource]]
+name = "ch"
+[datasource.clickhouse]
+url = "tcp://user:password@chhost:9000/analytics"
+# url = "http://user:password@chhost:8123/analytics"
+
+# Layer from a table with a native geo type column (Point, LineString, Polygon, ...)
+[[collection]]
+name = "sensors"
+title = "Sensors"
+[collection.clickhouse]
+datasource = "ch"
+table_name = "sensors"
+fid_field = "id"
+geometry_field = "location"
+
+# Layer from longitude/latitude columns
+[[collection]]
+name = "observations"
+title = "Observations"
+[collection.clickhouse]
+datasource = "ch"
+table_name = "observations"
+fid_field = "id"
+lon_field = "lon"
+lat_field = "lat"
+srid = 4326
+```
+
+Geometries stored as WKB or WKT strings are configured with `geometry_field` and
+`geometry_format = "wkb"` or `"wkt"`. A custom query can be set with `sql`.
+
+### Auto discovery
 
 All tables of a directory of GeoPackages or of a PostGIS database can be published at once:
 
